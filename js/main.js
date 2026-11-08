@@ -228,6 +228,10 @@ function computePose(A,o){
     case 1:{const cl=Math.pow(Math.abs(Math.cos(PI*b)),3),y=0.62*cl-0.22;
       setArm(0,1.15,-y,-0.12,0.7);setArm(1,1.15,y,0.12,0.7);
       A[6]=0.13*sw*en;A[1]=0.045*sw*en;A[9]=-0.1*sw;A[2]=0.08*sw;A[7]=-0.06*dip;break;}
+    case 4:{// 손날 휘젓기: right palm-edge sweeps from chest out to the side and back, left arm hangs loose
+      const c=0.5-0.5*Math.cos(PI*b),u=c*c*(3-2*c),L=(a,z)=>a+(z-a)*u;
+      setArm(1,L(0.5,0.62),L(0.8,-0.5),L(0.05,0.62),L(1.45,1.3));setArm(0,0.06,0,-0.1,0.18);
+      A[5]=-0.24*u*en;A[8]=-0.22*u;A[9]=0.08*u;A[7]=-0.1;A[1]=0.03*(u-0.5)*en;A[6]=0.05*(u-0.5)*en;break;}
     case 3:{const w=0.4*Math.sin(PI*b)*en;
       setArm(0,0.15,0,-2.7+w,0.3);setArm(1,0.15,0,2.7+w,0.3);A[6]=w*0.3;A[1]=-w*0.08;A[7]=0.15;A[9]=w*0.25;break;}
     default:{setArm(0,0.6,0,-0.1,0.9);setArm(1,0.6,0,0.1,0.9);A[6]=0.04*sw;A[7]=-0.03*dip;}
@@ -534,7 +538,7 @@ addEventListener('keydown',e=>{const k=e.key.toLowerCase();
   if(e.target.tagName==='BUTTON'&&(k===' '||k==='enter')&&!game.on&&k===' ')e.target.blur();
   if(game.on){if(k==='escape')quitGame();return;}
   if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys.add(k);if(k.startsWith('arrow'))e.preventDefault();return;}
-  if(k==='e')player.mode==='sit'?standUp():sitNearest();else if(k==='v')setView(!firstPerson);else if(k==='1')setMove(0);else if(k==='2')setMove(1);else if(k==='3')setMove(3);
+  if(k==='e')player.mode==='sit'?standUp():sitNearest();else if(k==='v')setView(!firstPerson);else if(k==='1')setMove(0);else if(k==='2')setMove(1);else if(k==='3')setMove(3);else if(k==='4')setMove(4);
   else if(k===' '){e.preventDefault();heung();}else if(k==='m')musicOn?musicStop():musicStart();});
 document.getElementById('go').addEventListener('click',()=>{
   nick=(nickIn.value.trim()||'흥부자').slice(0,10);try{localStorage.setItem('heung-nick',nick);}catch(e){}
@@ -662,7 +666,7 @@ function frame(now){
   const frac=vBeat-Math.floor(vBeat),pulse=sec===2&&!heungOn?0.25+0.5*((vBeat%4)/4):Math.exp(-frac*5);
 
   // section change → shuffle moves at drop
-  if(sec!==prevSec){if(sec===3&&musicOn)people.forEach(e=>{if(!e.isPlayer)e.move=e.seated?pick([1,3,0]):pick([0,1,3]);});
+  if(sec!==prevSec){if(sec===3&&musicOn)people.forEach(e=>{if(!e.isPlayer)e.move=e.seated?pick([1,3,0,4]):pick([0,1,3,4]);});
     secEl.textContent=!started?'탑승 대기':!musicOn?'음악 꺼짐':(style==='hh'?['인트로','벌스','빌드업','훅!']:['인트로','그루브','빌드업','드롭!'])[sec];secEl.className='pill'+(musicOn&&sec===3?' drop':musicOn&&sec===2?' build':'');prevSec=sec;}
   const dIdx=((Math.floor(vBeat)%4)+4)%4;if(dIdx!==prevDot){dots.forEach((d,i)=>d.classList.toggle('on',i===dIdx));prevDot=dIdx;}
 
@@ -675,7 +679,7 @@ function frame(now){
   updateDriver(vBeat,clock,heungOn||(musicOn&&sec===3));
   for(const e of people){
     if(e.gameOnly&&!e.av.root.visible)continue;
-    if(!e.isPlayer){const blk=Math.floor(vBeat/8);if(blk!==e.block){if(e.block>=0&&rnd()<0.3)e.move=e.seated?pick([-1,1,3,1]):pick([0,1,3]);if(rnd()<0.25)e.hand*=-1;e.block=blk;}}
+    if(!e.isPlayer){const blk=Math.floor(vBeat/8);if(blk!==e.block){if(e.block>=0&&rnd()<0.3)e.move=e.seated?pick([-1,1,3,1,4]):pick([0,1,3,4]);if(rnd()<0.25)e.hand*=-1;e.block=blk;}}
     let walking=false;
     if(e.path.length){const [tx,tz]=e.path[0],dx=tx-e.x,dz=tz-e.z,d=Math.hypot(dx,dz),st=(e.speed||1.5)*dt;
       if(d<=st){e.x=tx;e.z=tz;e.path.shift();if(!e.path.length){e.seated=e.mode==='sit';e.rotY=e.seated?0:(e.faceY||0);}}
