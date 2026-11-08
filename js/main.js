@@ -434,8 +434,21 @@ function setStyle(st){if(st===style)return;style=st;BPM=st==='hh'?92:128;SPB=60/
     if(started){t0=ctx.currentTime+0.1;nextT=t0;stepN=0;vBeat=-0.2;}}prevSec=-1;}
 function sched(){if(nextT<ctx.currentTime-0.05){const skip=Math.ceil((ctx.currentTime-nextT)/(SPB/4));nextT+=skip*SPB/4;stepN+=skip;}
   while(nextT<ctx.currentTime+0.2){(style==='hh'?playStepHH:playStep)(stepN,nextT);nextT+=SPB/4;stepN++;}}
-function musicStart(){if(!ctx){initAudio();ensureCrackle();crackleGain.gain.value=0;}ctx.resume();if(!started){t0=ctx.currentTime+0.15;nextT=t0;stepN=0;started=true;}clearInterval(timer);timer=setInterval(sched,25);musicOn=true;btnMusic.firstChild.nodeValue='음악 끄기';}
-function musicStop(){clearInterval(timer);if(ctx)ctx.suspend();musicOn=false;btnMusic.firstChild.nodeValue='음악 켜기';}
+/* mobile audio unlock: iOS mutes Web Audio in silent mode unless a media element is playing */
+let unlockEl=null;
+function unlockMobileAudio(){
+  try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
+  try{const b=ctx.createBuffer(1,1,22050),src=ctx.createBufferSource();src.buffer=b;src.connect(ctx.destination);src.start(0);}catch(e){}
+  if(!unlockEl){const n=4000,h=44,buf=new Uint8Array(h+n),dv=new DataView(buf.buffer),w=(o,str)=>{for(let i=0;i<str.length;i++)buf[o+i]=str.charCodeAt(i);};
+    w(0,'RIFF');dv.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);dv.setUint32(24,8000,true);dv.setUint32(28,8000,true);dv.setUint16(32,1,true);dv.setUint16(34,8,true);w(36,'data');dv.setUint32(40,n,true);buf.fill(128,h);
+    let bin='';for(let i=0;i<buf.length;i++)bin+=String.fromCharCode(buf[i]);
+    unlockEl=document.createElement('audio');unlockEl.src='data:audio/wav;base64,'+btoa(bin);unlockEl.loop=true;unlockEl.preload='auto';unlockEl.setAttribute('playsinline','');unlockEl.setAttribute('x-webkit-airplay','deny');}
+  try{const pr=unlockEl.play();if(pr&&pr.catch)pr.catch(()=>{});}catch(e){}
+}
+let soundHintShown=false;
+function checkRunning(){setTimeout(()=>{if(musicOn&&ctx&&ctx.state!=='running'&&!soundHintShown){soundHintShown=true;toast('소리가 안 나면 화면을 한 번 눌러주세요');}},900);}
+function musicStart(){if(!ctx){initAudio();ensureCrackle();crackleGain.gain.value=0;}ctx.resume();unlockMobileAudio();checkRunning();if(!started){t0=ctx.currentTime+0.15;nextT=t0;stepN=0;started=true;}clearInterval(timer);timer=setInterval(sched,25);musicOn=true;btnMusic.firstChild.nodeValue='음악 끄기';}
+function musicStop(){clearInterval(timer);if(ctx)ctx.suspend();if(unlockEl)unlockEl.pause();musicOn=false;btnMusic.firstChild.nodeValue='음악 켜기';}
 
 /* ---------- UI ---------- */
 const btnMusic=document.getElementById('bMusic'),secEl=document.getElementById('sec'),dots=[...document.querySelectorAll('#dots i')];
@@ -504,7 +517,7 @@ document.getElementById('vol').addEventListener('input',e=>{vol=e.target.value/1
 ['change','pointerup'].forEach(ev=>document.getElementById('vol').addEventListener(ev,e=>e.target.blur()));
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(b&&e.detail>0)b.blur();});
 // browsers may pause audio (tab switch, phone interruption) — resume on return or next touch
-const wake=()=>{if(musicOn&&ctx&&ctx.state!=='running')ctx.resume();};
+const wake=()=>{if(musicOn&&ctx){if(ctx.state!=='running')ctx.resume();if(unlockEl&&unlockEl.paused)unlockMobileAudio();}};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)wake();});
 addEventListener('pointerdown',wake,true);addEventListener('keydown',wake,true);
 const fold=document.getElementById('fold'),panel=document.getElementById('panel');
