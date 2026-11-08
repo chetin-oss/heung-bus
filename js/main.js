@@ -10,10 +10,10 @@ const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
 app.appendChild(renderer.domElement);
-const scene=new THREE.Scene();scene.background=new THREE.Color(0xd2d8d6);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xf0a878);
 const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,0.05,60);
 const hemi=new THREE.HemisphereLight(0xfff2f8,0x4a2a3a,0.72);scene.add(hemi);
-const sun=new THREE.DirectionalLight(0xfff1dc,0.45);sun.position.set(3,4,-2);scene.add(sun);
+const sun=new THREE.DirectionalLight(0xffc48a,0.5);sun.position.set(3,4,-2);scene.add(sun);
 
 const MC={};
 function mat(c,o){const k=c+'|'+JSON.stringify(o||{});return MC[k]||(MC[k]=new THREE.MeshPhongMaterial(Object.assign({color:c,shininess:12},o||{})));}
@@ -27,27 +27,79 @@ function inst(geo,m,list){const im=new THREE.InstancedMesh(geo,m,list.length);li
 
 /* ---------- outside scenery (autumn mountains) ---------- */
 function ridge(x,base,amp,comps){let y=base;for(const [f,a,p] of comps)y-=amp*a*Math.sin(2*PI*f*x/2048+p);return y;}
-/* reed field (갈대밭) painter, tileable horizontally */
-function paintReeds(g,o){
-  const H=150;
-  const sky=g.createLinearGradient(0,0,0,H+10);sky.addColorStop(0,o.sky0);sky.addColorStop(1,o.sky1);g.fillStyle=sky;g.fillRect(0,0,2048,512);
-  if(o.sun){const s=g.createRadialGradient(1024,H-30,6,1024,H-30,240);s.addColorStop(0,'rgba(255,252,235,1)');s.addColorStop(0.15,'rgba(255,236,180,.9)');s.addColorStop(1,'rgba(255,190,100,0)');g.fillStyle=s;g.fillRect(0,0,2048,512);}
-  g.fillStyle=o.hill;g.beginPath();g.moveTo(0,512);for(let x=0;x<=2048;x+=8)g.lineTo(x,ridge(x,H-12,28,[[2,1,0],[5,.5,1],[11,.2,2]]));g.lineTo(2048,512);g.fill();
-  g.fillStyle=o.trees;g.beginPath();g.moveTo(0,512);for(let x=0;x<=2048;x+=4)g.lineTo(x,H+2-5*Math.sin(2*PI*x/2048*9)-5*Math.abs(Math.sin(2*PI*x/2048*41))-3*Math.sin(2*PI*x/2048*97));g.lineTo(2048,512);g.fill();
-  for(let k=0;k<26;k++){const x=k*78.77+((k*37)%50),h=14+((k*53)%20);g.beginPath();g.ellipse(x,H+4-h*0.6,8+h*0.3,h,0,0,2*PI);g.fill();}
-  g.fillStyle=o.haze;g.fillRect(0,H-10,2048,24);
-  const fld=g.createLinearGradient(0,H+8,0,512);fld.addColorStop(0,o.f0);fld.addColorStop(1,o.f1);g.fillStyle=fld;g.fillRect(0,H+8,2048,512-H-8);
-  const reed=(x,y,len,lean,stem,plume)=>{const tx=x+lean,ty=y-len;g.strokeStyle=stem;g.lineWidth=Math.max(1,len/40);g.beginPath();g.moveTo(x,y);g.quadraticCurveTo(x+lean*0.3,y-len*0.6,tx,ty);g.stroke();
-    // feathery plume: fan of short strokes drooping with the wind
-    g.strokeStyle=plume;g.lineWidth=Math.max(1,len/70);const pl=len*0.28;
-    for(let k=0;k<7;k++){const a=-1.25+k*0.12+lean*0.004;g.beginPath();g.moveTo(tx,ty);g.quadraticCurveTo(tx+Math.cos(a)*pl*0.5+pl*0.2,ty+Math.sin(a)*pl*0.5,tx+Math.cos(a+0.5)*pl+pl*0.35,ty+Math.sin(a+0.5)*pl*0.6+pl*0.3);g.stroke();}};
-  const N=7000;
-  for(let i=0;i<N;i++){const d=Math.pow(i/N,1.6),y=H+12+d*(512-H-12)+Math.random()*6,len=5+d*72*(0.75+Math.random()*0.5),x=Math.random()*2048,lean=len*(0.18+Math.random()*0.12);
-    const stem=o.stems[i%o.stems.length],plume=o.plumes[i%o.plumes.length];
-    reed(x,y,len,lean,stem,plume);if(x<140)reed(x+2048,y,len,lean,stem,plume);if(x>1908)reed(x-2048,y,len,lean,stem,plume);}
+/* sunset countryside (노을 시골풍경) painter, tileable horizontally */
+function paintCountry(g,o){
+  const W2=2048,H=250;let sd=11;const r=()=>{sd=(sd*16807)%2147483647;return (sd-1)/2147483646;};
+  const wrap=(x,m,fn)=>{fn(x);if(x<m)fn(x+W2);if(x>W2-m)fn(x-W2);};
+  const wave=(x,c)=>c.reduce((y,[f,a,p])=>y+a*Math.sin(2*PI*f*x/W2+p),0);
+  // sky
+  const sky=g.createLinearGradient(0,0,0,H+20);o.sky.forEach(([t,c])=>sky.addColorStop(t,c));g.fillStyle=sky;g.fillRect(0,0,W2,512);
+  // sun + glow
+  const sx=o.sunX,sy=H-46;
+  const gl=g.createRadialGradient(sx,sy,10,sx,sy,o.glowR);gl.addColorStop(0,o.glow0);gl.addColorStop(0.35,o.glow1);gl.addColorStop(1,'rgba(255,150,80,0)');g.fillStyle=gl;g.fillRect(0,0,W2,H+40);
+  g.fillStyle=o.sunC;g.beginPath();g.arc(sx,sy,o.sunR,0,2*PI);g.fill();
+  // streaky clouds lit from below
+  for(let i=0;i<14;i++){const x=r()*W2,y=40+r()*130,w=120+r()*260,h=5+r()*9,c=o.clouds[i%o.clouds.length];
+    wrap(x,w,(xx)=>{g.fillStyle=c;g.beginPath();g.ellipse(xx,y,w/2,h,0,0,2*PI);g.fill();g.fillStyle=o.cloudLit;g.beginPath();g.ellipse(xx+w*0.05,y+h*0.45,w*0.42,h*0.35,0,0,2*PI);g.fill();});}
+  // birds
+  g.strokeStyle=o.bird;g.lineWidth=1.6;for(let i=0;i<9;i++){const x=sx-160+r()*360,y=110+r()*60,s=4+r()*4;g.beginPath();g.moveTo(x-s,y-s*0.4);g.quadraticCurveTo(x-s*0.4,y-s*0.7,x,y);g.quadraticCurveTo(x+s*0.4,y-s*0.7,x+s,y-s*0.4);g.stroke();}
+  // layered mountains, far to near
+  const mtn=(base,amp,c,col)=>{g.fillStyle=col;g.beginPath();g.moveTo(0,512);for(let x=0;x<=W2;x+=6)g.lineTo(x,base-amp*Math.abs(wave(x,c)));g.lineTo(W2,512);g.fill();};
+  mtn(H-8,70,[[2,.6,0],[3,.5,1.3],[7,.25,2]],o.m0);
+  mtn(H+2,48,[[3,.6,.7],[5,.45,2.1],[13,.12,1]],o.m1);
+  g.fillStyle=o.mist;g.fillRect(0,H-14,W2,30);
+  mtn(H+16,30,[[4,.5,2.5],[6,.5,.3],[17,.1,0]],o.m2);
+  // treeline + village on the near ridge
+  const VY=H+26;
+  g.fillStyle=o.trees;g.beginPath();g.moveTo(0,512);for(let x=0;x<=W2;x+=4)g.lineTo(x,VY-4-4*Math.sin(2*PI*x/W2*11)-3*Math.abs(Math.sin(2*PI*x/W2*53)));g.lineTo(W2,512);g.fill();
+  const tree=(x,y,s,c)=>{g.fillStyle=c;g.beginPath();g.ellipse(x,y-s,s*0.9,s,0,0,2*PI);g.ellipse(x-s*0.6,y-s*0.55,s*0.6,s*0.6,0,0,2*PI);g.ellipse(x+s*0.65,y-s*0.6,s*0.6,s*0.65,0,0,2*PI);g.fill();g.fillRect(x-1,y-s*0.3,2,s*0.4);};
+  for(let i=0;i<34;i++){const x=r()*W2,s=7+r()*9;wrap(x,30,(xx)=>tree(xx,VY+2,s,o.trees));}
+  // houses: low walls + curved tiled / slate roofs, warm windows
+  const house=(x,y,w,h,roof,hanok)=>{g.fillStyle=o.wall;g.fillRect(x-w/2,y-h,w,h);
+    g.fillStyle=o.win;g.fillRect(x-w*0.25,y-h*0.7,w*0.16,h*0.4);if(w>34)g.fillRect(x+w*0.12,y-h*0.7,w*0.16,h*0.4);
+    g.fillStyle=roof;g.beginPath();const rh=h*0.75,ov=w*0.16;
+    if(hanok){g.moveTo(x-w/2-ov,y-h-rh*0.25);g.quadraticCurveTo(x-w*0.3,y-h,x-w*0.32,y-h-rh*0.15);g.lineTo(x-w*0.22,y-h-rh);g.lineTo(x+w*0.22,y-h-rh);g.lineTo(x+w*0.32,y-h-rh*0.15);g.quadraticCurveTo(x+w*0.3,y-h,x+w/2+ov,y-h-rh*0.25);g.lineTo(x+w/2+ov*0.3,y-h);g.lineTo(x-w/2-ov*0.3,y-h);}
+    else{g.moveTo(x-w/2-ov,y-h);g.lineTo(x-w*0.1,y-h-rh);g.lineTo(x+w*0.1,y-h-rh);g.lineTo(x+w/2+ov,y-h);}
+    g.closePath();g.fill();};
+  const villages=[180,700,1130,1640];
+  for(const vx of villages){const n=2+Math.floor(r()*3);for(let k=0;k<n;k++){const x=vx+k*46+r()*14,w=28+r()*16,h=10+r()*5;
+    wrap(x,60,(xx)=>{house(xx,VY+6+k%2*4,w,h,o.roofs[(k+vx)%o.roofs.length],r()<0.55);});}
+    // persimmon tree beside the village
+    const px=vx-34;wrap(px,40,(xx)=>{tree(xx,VY+10,13,o.persTree);g.fillStyle=o.pers;for(let j=0;j<16;j++){g.beginPath();g.arc(xx-11+r()*22,VY-14+r()*20,1.8,0,2*PI);g.fill();}});
+    // chimney smoke
+    g.strokeStyle=o.smoke;g.lineWidth=6;g.lineCap='round';g.beginPath();let x0=vx+10,y0=VY-10;g.moveTo(x0,y0);for(let k=1;k<10;k++)g.lineTo(x0+k*6+Math.sin(k)*4,y0-k*5);g.stroke();}
+  // golden rice paddies with 논두렁 ridges (perspective bands)
+  const top=VY+8;let y=top,band=6;
+  while(y<512){const yb=Math.min(512,y+band),t=(y-top)/(512-top);
+    const fc=g.createLinearGradient(0,y,0,yb);fc.addColorStop(0,o.paddy[0]);fc.addColorStop(1,o.paddy[1]);g.fillStyle=fc;g.fillRect(0,y,W2,yb-y);
+    g.fillStyle=o.paddySheen;for(let x=0;x<W2;x+=3+t*4){g.fillRect(x+r()*3,y+1+r()*(yb-y-2),1+t*1.5,1+t*1.5);}
+    g.fillStyle=o.levee;g.fillRect(0,yb-1-t*3,W2,1+t*3);
+    y=yb;band*=1.32;}
+  // field paths (diagonal 논두렁)
+  g.strokeStyle=o.levee;for(let i=0;i<8;i++){const x=i*256+90;g.lineWidth=2;g.beginPath();g.moveTo(x,top);g.lineTo(x-140,512);g.stroke();}
+  // white silage bales (공룡알) + scarecrow
+  const bale=(x,y,s)=>{g.fillStyle=o.baleShade;g.beginPath();g.ellipse(x+s*0.15,y+s*0.15,s*1.05,s*0.75,0,0,2*PI);g.fill();g.fillStyle=o.bale;g.beginPath();g.ellipse(x,y,s,s*0.72,0,0,2*PI);g.fill();g.fillStyle=o.baleLit;g.beginPath();g.ellipse(x-s*0.25,y-s*0.25,s*0.45,s*0.25,0,0,2*PI);g.fill();};
+  for(let i=0;i<10;i++){const yy=top+30+r()*170,s=4+(yy-top)*0.09,x=r()*W2;wrap(x,40,(xx)=>{bale(xx,yy,s);bale(xx+s*2.2,yy+s*0.3,s);});}
+  wrap(1420,40,(xx)=>{g.strokeStyle=o.pole;g.lineWidth=3;g.beginPath();g.moveTo(xx,400);g.lineTo(xx,340);g.moveTo(xx-22,360);g.lineTo(xx+22,358);g.stroke();g.fillStyle=o.hat;g.beginPath();g.ellipse(xx,337,14,4,0,0,2*PI);g.fill();g.fillStyle=o.pole;g.beginPath();g.arc(xx,342,6,0,2*PI);g.fill();});
+  // power poles + sagging wires along the road
+  const PY=455;g.strokeStyle=o.pole;
+  for(let i=0;i<8;i++){const x=i*256+40;g.lineWidth=5;g.beginPath();g.moveTo(x,512);g.lineTo(x,PY-200);g.stroke();g.lineWidth=4;g.beginPath();g.moveTo(x-26,PY-188);g.lineTo(x+26,PY-188);g.stroke();
+    g.lineWidth=1.2;for(const dx of [-22,22]){const x1=x+dx,x2=x1+256;g.beginPath();g.moveTo(x1,PY-188);g.quadraticCurveTo((x1+x2)/2,PY-150,x2,PY-188);g.stroke();}}
+  // roadside grass + cosmos (코스모스) in the foreground
+  const fg=g.createLinearGradient(0,470,0,512);fg.addColorStop(0,'rgba(0,0,0,0)');fg.addColorStop(1,o.fgShade);g.fillStyle=fg;g.fillRect(0,470,W2,42);
+  for(let i=0;i<900;i++){const x=r()*W2,yb=496+r()*16,len=10+r()*26,lean=-4+r()*8;g.strokeStyle=o.grass[i%o.grass.length];g.lineWidth=1.3;
+    wrap(x,20,(xx)=>{g.beginPath();g.moveTo(xx,yb);g.quadraticCurveTo(xx+lean*0.3,yb-len*0.6,xx+lean,yb-len);g.stroke();
+      if(i%5===0){g.fillStyle=o.cosmos[i%o.cosmos.length];for(let k=0;k<6;k++){const a=k*PI/3;g.beginPath();g.ellipse(xx+lean+Math.cos(a)*3,yb-len+Math.sin(a)*3,2.4,1.3,a,0,2*PI);g.fill();}g.fillStyle='#f2c230';g.beginPath();g.arc(xx+lean,yb-len,1.4,0,2*PI);g.fill();}});}
 }
-const sceneryTex=canvasTex(2048,512,(g)=>paintReeds(g,{sky0:'#b9c6cc',sky1:'#e4e3da',hill:'#a9b0aa',trees:'#5f6a58',haze:'rgba(220,222,214,.35)',f0:'#b8a885',f1:'#a38d66',
-  stems:['#8f7a55','#a08a63','#7d6a4a','#b39c72'],plumes:['#efe7d4','#e2d6bb','#f6f1e4','#d8c9a8','#cbb994']}));
+const COUNTRY_EVE={sunX:1024,sunR:30,glowR:420,sunC:'#fff2c8',glow0:'rgba(255,236,170,.95)',glow1:'rgba(255,170,90,.55)',
+  sky:[[0,'#4a3d7a'],[0.35,'#b0587e'],[0.65,'#f08a5d'],[0.88,'#ffc178'],[1,'#ffe0a2']],
+  clouds:['rgba(150,80,120,.55)','rgba(190,90,110,.5)','rgba(120,70,120,.5)'],cloudLit:'rgba(255,190,130,.7)',bird:'rgba(60,30,50,.8)',
+  m0:'#a3698a',m1:'#7c4d72',mist:'rgba(255,190,150,.28)',m2:'#5a3656',trees:'#3b2236',persTree:'#5c3a3a',pers:'#ff8a2a',
+  wall:'#d9b597',win:'#ffd36a',roofs:['#3c2d3c','#5a3a3c','#46506a'],smoke:'rgba(235,205,210,.16)',
+  paddy:['#e0a447','#c98a32'],paddySheen:'rgba(255,214,120,.6)',levee:'rgba(110,62,40,.55)',
+  bale:'#f3e6dc',baleLit:'#fff6ec',baleShade:'rgba(90,40,30,.35)',pole:'#2f1d26',hat:'#c99a50',
+  fgShade:'rgba(50,25,20,.55)',grass:['#7a5a2e','#5e4426','#8c6a36'],cosmos:['#ff8fc0','#ffffff','#e0408a','#ffc2dc']};
+const sceneryTex=canvasTex(2048,512,(g)=>paintCountry(g,COUNTRY_EVE));
 sceneryTex.wrapS=THREE.RepeatWrapping;
 const sceneR=sceneryTex, sceneL=sceneryTex.clone();sceneL.needsUpdate=true;sceneL.wrapS=THREE.RepeatWrapping;sceneL.offset.x=0.37;
 const scnGeo=new THREE.PlaneGeometry(20,5.2);
@@ -56,9 +108,9 @@ const pL=new THREE.Mesh(scnGeo,new THREE.MeshBasicMaterial({map:sceneL}));pL.pos
 
 /* road views for windshield and rear window */
 function drawRoad(g,w,h,off,toward){
-  const hz=h*0.45;const sky=g.createLinearGradient(0,0,0,hz);sky.addColorStop(0,'#b9c6cc');sky.addColorStop(1,'#e4e3da');g.fillStyle=sky;g.fillRect(0,0,w,hz);
-  g.fillStyle='#5f6a58';g.beginPath();g.moveTo(0,hz);for(let x=0;x<=w;x+=8)g.lineTo(x,hz-14-10*Math.sin(x*0.03)-6*Math.sin(x*0.09));g.lineTo(w,hz);g.fill();
-  g.fillStyle='#b5a27c';g.fillRect(0,hz,w,h-hz);g.fillStyle='rgba(240,232,212,.5)';for(let i=0;i<220;i++){const yy=hz+Math.pow(((i*73)%100)/100,0.7)*(h-hz),xx=(i*97)%w;g.fillRect(xx,yy-2-(yy-hz)*0.08,1,2+(yy-hz)*0.08);}
+  const hz=h*0.45;const sky=g.createLinearGradient(0,0,0,hz);sky.addColorStop(0,'#8a5a8e');sky.addColorStop(0.6,'#f08a5d');sky.addColorStop(1,'#ffd49a');g.fillStyle=sky;g.fillRect(0,0,w,hz);
+  g.fillStyle='#5a3656';g.beginPath();g.moveTo(0,hz);for(let x=0;x<=w;x+=8)g.lineTo(x,hz-14-10*Math.sin(x*0.03)-6*Math.sin(x*0.09));g.lineTo(w,hz);g.fill();
+  g.fillStyle='#d49a42';g.fillRect(0,hz,w,h-hz);g.fillStyle='rgba(255,214,120,.55)';for(let i=0;i<220;i++){const yy=hz+Math.pow(((i*73)%100)/100,0.7)*(h-hz),xx=(i*97)%w;g.fillRect(xx,yy-2-(yy-hz)*0.08,1,2+(yy-hz)*0.08);}
   g.fillStyle='#55585e';g.beginPath();g.moveTo(w*0.47,hz);g.lineTo(w*0.53,hz);g.lineTo(w*1.05,h);g.lineTo(-w*0.05,h);g.fill();
   g.fillStyle='#f3e9a0';
   for(let k=0;k<8;k++){let p=((k+(toward?off:-off))%8+8)%8/8;const y0=hz+(h-hz)*p*p,y1=hz+(h-hz)*Math.min(1,(p+0.06))**2;const ww=1+3*p;g.fillRect(w/2-ww/2,y0,ww,(y1-y0)*0.6);}
@@ -108,8 +160,11 @@ bus.add(mesh(new THREE.BoxGeometry(W,2.4,0.1),wallM,0,1.2,L0));
 const rearWin=mesh(new THREE.PlaneGeometry(2.2,1.3),new THREE.MeshBasicMaterial({map:roadB}),0,1.5,L1-0.055);rearWin.rotation.y=PI;bus.add(rearWin);
 /* sunset (역광) layers, faded in by the mini-game */
 const sunsetMats=[];
-const sunsetScn=canvasTex(2048,512,(g)=>paintReeds(g,{sun:true,sky0:'#ffd59a',sky1:'#ffb45e',hill:'#c9784a',trees:'#3a2014',haze:'rgba(255,190,120,.35)',f0:'#6a3c1c',f1:'#2a160c',
-  stems:['#3a200f','#4a2a14','#2c170b'],plumes:['#ffd88a','#ffc366','#ffe6b0','#f0a650','#ffcf7a']}));
+const sunsetScn=canvasTex(2048,512,(g)=>paintCountry(g,Object.assign({},COUNTRY_EVE,{sunR:46,glowR:700,sunC:'#fffbe8',glow0:'rgba(255,250,225,1)',glow1:'rgba(255,200,120,.8)',
+  sky:[[0,'#ff9a5a'],[0.5,'#ffc27a'],[1,'#fff0c4']],clouds:['rgba(255,170,100,.5)'],cloudLit:'rgba(255,240,200,.8)',
+  m0:'#e08a5a',m1:'#b0583a',m2:'#7a3420',mist:'rgba(255,220,170,.45)',trees:'#3a1a0e',persTree:'#3a1a0e',wall:'#4a2414',roofs:['#2a1208'],
+  paddy:['#c0762a','#5a2c12'],paddySheen:'rgba(255,220,140,.7)',levee:'rgba(40,16,6,.6)',bale:'#ffd9a0',baleLit:'#fff3d8',
+  pole:'#1e0c04',grass:['#2c160a','#3a1e0e'],fgShade:'rgba(20,8,2,.7)'})));
 sunsetScn.wrapS=THREE.RepeatWrapping;const sunsetL=sunsetScn.clone();sunsetL.needsUpdate=true;sunsetL.wrapS=THREE.RepeatWrapping;sunsetL.offset.x=0.37;
 const sunsetPlanes=[];
 for(const [tx,x,ry] of [[sunsetScn,2.25,-PI/2],[sunsetL,-2.25,PI/2]]){const m=new THREE.MeshBasicMaterial({map:tx,transparent:true,opacity:0,depthWrite:false});sunsetMats.push(m);const p=new THREE.Mesh(scnGeo,m);p.position.set(x,1.3,0);p.rotation.y=ry;scene.add(p);sunsetPlanes.push(p);}
@@ -118,8 +173,8 @@ const backdropTex=canvasTex(512,512,(g)=>{const gr=g.createLinearGradient(0,0,0,
   const s=g.createRadialGradient(256,318,4,256,318,150);s.addColorStop(0,'rgba(255,255,245,1)');s.addColorStop(0.2,'rgba(255,240,200,.9)');s.addColorStop(1,'rgba(255,200,120,0)');g.fillStyle=s;g.fillRect(0,0,512,512);});
 const backdropMat=new THREE.MeshBasicMaterial({map:backdropTex,transparent:true,opacity:0,depthWrite:false});
 const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(80,30),backdropMat);backdrop.position.set(9,5,0);backdrop.rotation.y=-PI/2;scene.add(backdrop);
-const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshPhongMaterial({color:0xa8936c}));ground.rotation.x=-PI/2;ground.position.y=-0.5;scene.add(ground);
-const skyDay=new THREE.Color(0xd2d8d6),skySet=new THREE.Color(0xffc98a);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshPhongMaterial({color:0xc98a32}));ground.rotation.x=-PI/2;ground.position.y=-0.5;scene.add(ground);
+const skyDay=new THREE.Color(0xf0a878),skySet=new THREE.Color(0xffc98a);
 const sunsetRear=canvasTex(512,256,(g)=>{const sky=g.createLinearGradient(0,0,0,170);sky.addColorStop(0,'#ffd99a');sky.addColorStop(1,'#ff9a45');g.fillStyle=sky;g.fillRect(0,0,512,256);
   const glow=g.createRadialGradient(256,140,10,256,140,220);glow.addColorStop(0,'rgba(255,255,240,1)');glow.addColorStop(0.18,'rgba(255,240,190,.95)');glow.addColorStop(1,'rgba(255,170,80,0)');g.fillStyle=glow;g.fillRect(0,0,512,256);
   g.fillStyle='#8a3c1a';g.beginPath();g.moveTo(0,256);for(let x=0;x<=512;x+=8)g.lineTo(x,168-12*Math.sin(x*0.02)-6*Math.sin(x*0.07));g.lineTo(512,256);g.fill();g.fillStyle='#2e140a';g.fillRect(0,200,512,56);});
@@ -649,7 +704,7 @@ function drawTV(sec,beat){const {g}=tvTex.userData,w=512,h=288;
   const n=28;if(analyser&&musicOn)analyser.getByteFrequencyData(fft);
   for(let i=0;i<n;i++){const v=(analyser&&musicOn)?fft[Math.floor(i*1.8)+1]/255:0.15+0.1*Math.sin(i+beat*3);const bh=v*150;g.fillStyle=`hsl(${(i*12+beat*20)%360},90%,60%)`;g.fillRect(16+i*17.5,h-30-bh,13,bh);}
   g.textAlign='center';g.font='56px "Black Han Sans",sans-serif';g.lineWidth=8;g.strokeStyle='#b0103e';
-  const title=style==='hh'?(sec===3?'얼씨구 훅 간다!!':sec===2?'올라간다~ 올라가!':'갈대밭 붐뱁'):(sec===3?'흥 폭발 드롭!!':sec===2?'올라간다~ 올라가!':'고속도로 디스코');
+  const title=style==='hh'?(sec===3?'얼씨구 훅 간다!!':sec===2?'올라간다~ 올라가!':'시골길 붐뱁'):(sec===3?'흥 폭발 드롭!!':sec===2?'올라간다~ 올라가!':'고속도로 디스코');
   g.strokeText(title,w/2,82);g.fillStyle='#ffe14a';g.fillText(title,w/2,82);
   g.font='bold 20px "Gothic A1",sans-serif';g.fillStyle='#fff';g.fillText(style==='hh'?'♪ 관광버스 힙합 · '+BPM+' BPM':'♪ 단풍놀이 메들리 · '+BPM+' BPM',w/2,118);
   g.fillStyle='#000';g.fillRect(0,h-26,w,26);g.fillStyle='#7ff7ea';g.font='bold 16px "Gothic A1",sans-serif';g.textAlign='left';
